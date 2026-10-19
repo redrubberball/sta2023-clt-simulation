@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Normal Distribution Explorer</title>
+<style>
+:root{font-family:Arial,Helvetica,sans-serif;color:#202536;background:#fff}*{box-sizing:border-box}body{margin:0;padding:14px}.wrap{max-width:760px;margin:auto}h2{margin:0 0 6px;color:#581c87;font-size:1.2rem}p{margin:5px 0 12px;line-height:1.45}.controls{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px 15px;margin:12px 0}.field{display:flex;flex-direction:column;gap:5px}label{font-size:.92rem;font-weight:600}input[type=number],select{font:inherit;border:1px solid #acb4c2;border-radius:6px;padding:8px;min-width:0;width:100%;background:#fff;color:#202536}.cutoff-row{display:flex;gap:6px}.cutoff-row input{flex:1}.step{border:1px solid #9d83bb;background:#f8f4fc;color:#581c87;border-radius:6px;min-width:38px;font-size:1.2rem;cursor:pointer}.step:focus-visible,input:focus-visible,select:focus-visible{outline:3px solid #bc9df3;outline-offset:1px}.slider{width:100%;accent-color:#7c3aed}.graph{width:100%;height:auto;border:1px solid #e4e7eb;border-radius:8px;background:#fff;touch-action:none;cursor:crosshair}.result{margin-top:8px;display:flex;gap:12px;flex-wrap:wrap;align-items:center}.result span{font-size:.9rem}.result strong{color:#581c87;font-size:1.05rem}.hint{font-size:.83rem;color:#526072}.error{color:#a11616;font-size:.86rem;min-height:1.1em}svg text{font-family:Arial,Helvetica,sans-serif}@media(max-width:450px){body{padding:8px}.controls{gap:8px}h2{font-size:1.05rem}}
+</style>
+</head>
+<body>
+<main class="wrap">
+<h2>Normal Distribution Explorer</h2>
+<p class="hint">Explore how a cutoff and shaded area relate to a Normal distribution. Type an exact value or use the slider and −/+ buttons.</p>
+<div class="controls">
+<div class="field"><label for="mean">Mean (μ)</label><input id="mean" type="number" step="any" value="0"></div>
+<div class="field"><label for="sd">Standard deviation (σ)</label><input id="sd" type="number" step="any" min="0.000001" value="1"></div>
+<div class="field"><label for="tail">Shaded region</label><select id="tail"><option value="left">Left of cutoff</option><option value="right">Right of cutoff</option></select></div>
+<div class="field"><label for="cutoff">Cutoff (x)</label><div class="cutoff-row"><button class="step" id="minus" type="button" aria-label="Decrease cutoff by 0.01">−</button><input id="cutoff" type="number" step="0.01" value="0"><button class="step" id="plus" type="button" aria-label="Increase cutoff by 0.01">+</button></div></div>
+</div>
+<label for="slider" class="hint">Move cutoff</label><input class="slider" id="slider" type="range" min="-4" max="4" value="0" step="0.01" aria-label="Move cutoff position">
+<svg class="graph" id="plot" viewBox="0 0 700 290" role="img" aria-label="Normal density with shaded region and adjustable cutoff">
+<path id="shade" fill="#c4b5fd" fill-opacity=".55" stroke="none"></path>
+<path id="curve" fill="none" stroke="#2563eb" stroke-width="3" stroke-linejoin="round"></path>
+<line x1="45" x2="668" y1="240" y2="240" stroke="#475569" stroke-width="1.5"></line>
+<line id="meanLine" x1="0" x2="0" y1="0" y2="240" stroke="#94a3b8" stroke-dasharray="5 5" stroke-width="1.5"></line>
+<line id="cutLine" x1="0" x2="0" y1="0" y2="240" stroke="#7e22ce" stroke-dasharray="5 3" stroke-width="2.5"></line>
+<text id="meanLabel" text-anchor="middle" y="264" fill="#475569" font-size="16"></text>
+<text id="cutLabel" text-anchor="middle" y="285" fill="#581c87" font-size="16"></text>
+<text x="48" y="23" fill="#64748b" font-size="14">Drag on graph to move cutoff</text>
+</svg>
+<div class="result"><span>z-score: <strong id="zout">0</strong></span><span>Shaded probability: <strong id="pout">0.5000</strong></span><span>Percentage: <strong id="percent">50.0%</strong></span></div>
+<div class="error" id="error" aria-live="polite"></div>
+<p class="hint">The graph is for exploring an example; it does not submit an answer or affect a grade.</p>
+</main>
+<script>
+(()=>{'use strict';
+const $=id=>document.getElementById(id);const mean=$('mean'),sd=$('sd'),cutoff=$('cutoff'),tail=$('tail'),slider=$('slider'),plot=$('plot');
+const query=new URLSearchParams(location.search);const numeric=(name,fallback)=>{const value=Number(query.get(name));return query.has(name)&&Number.isFinite(value)?value:fallback};
+mean.value=numeric('mu',0);sd.value=Math.max(.000001,numeric('sd',1));tail.value=query.get('tail')==='right'?'right':'left';
+// Start at the mean, so the learner positions the marker rather than receiving the example's cutoff.
+cutoff.value=mean.value;
+let lastMean=Number(mean.value);let drag=false;
+const fmt=v=>Number(v.toFixed(5)).toString();
+const erf=x=>{const sign=x<0?-1:1;const a=Math.abs(x);const t=1/(1+0.3275911*a);const y=1-(((((1.061405429*t-1.453152027)*t)+1.421413741)*t-0.284496736)*t+0.254829592)*t*Math.exp(-a*a);return sign*y};
+const cdf=z=>.5*(1+erf(z/Math.SQRT2));const density=z=>Math.exp(-z*z/2);
+const L=45,R=668,B=240,H=196;const xpix=z=>L+(z+4)/8*(R-L),ypix=z=>B-H*density(z),zpix=x=>((x-L)/(R-L))*8-4;
+function render(){const mu=Number(mean.value),sigma=Number(sd.value),x=Number(cutoff.value);if(!Number.isFinite(mu)||!Number.isFinite(sigma)||sigma<=0||!Number.isFinite(x)||mean.value===''||sd.value===''||cutoff.value===''){$('error').textContent='Enter a valid mean, positive standard deviation, and cutoff.';return}$('error').textContent='';const z=(x-mu)/sigma;slider.value=Math.max(-4,Math.min(4,z));$('zout').textContent=z.toFixed(3);const p=tail.value==='right'?1-cdf(z):cdf(z);$('pout').textContent=p.toFixed(4);$('percent').textContent=(p*100).toFixed(1)+'%';const n=200;let curve='',shade='';for(let i=0;i<=n;i++){const zi=-4+8*i/n;curve+=(i?' L':'M')+xpix(zi).toFixed(2)+' '+ypix(zi).toFixed(2)}$('curve').setAttribute('d',curve);const bound=Math.max(-4,Math.min(4,z));const lo=tail.value==='right'?bound:-4,hi=tail.value==='right'?4:bound;shade='M '+xpix(lo).toFixed(2)+' '+B;for(let i=0;i<=n;i++){const zi=lo+(hi-lo)*i/n;shade+=' L '+xpix(zi).toFixed(2)+' '+ypix(zi).toFixed(2)}shade+=' L '+xpix(hi).toFixed(2)+' '+B+' Z';$('shade').setAttribute('d',shade);const meanX=xpix(0),cutX=xpix(bound);$('meanLine').setAttribute('x1',meanX);$('meanLine').setAttribute('x2',meanX);$('meanLine').setAttribute('y1',ypix(0));const valY=ypix(bound);$('cutLine').setAttribute('x1',cutX);$('cutLine').setAttribute('x2',cutX);$('cutLine').setAttribute('y1',valY);$('meanLabel').setAttribute('x',meanX);$('meanLabel').textContent='Mean: '+fmt(mu);$('cutLabel').setAttribute('x',Math.max(95,Math.min(620,cutX)));$('cutLabel').textContent='Cutoff: '+fmt(x);plot.setAttribute('aria-label',`Normal distribution mean ${mu}, standard deviation ${sigma}, ${tail.value} tail shaded at ${x}, probability ${p.toFixed(4)}`)}
+for(const el of [mean,sd,cutoff,tail])el.addEventListener('input',render);
+slider.addEventListener('input',()=>{const mu=Number(mean.value),sigma=Number(sd.value);if(sigma>0){cutoff.value=fmt(mu+Number(slider.value)*sigma);render()}});
+for(const [id,amount] of [['minus',-.01],['plus',.01]])$(id).addEventListener('click',()=>{cutoff.value=fmt(Number(cutoff.value)+amount);render()});
+function moveFromPointer(ev){const rect=plot.getBoundingClientRect();const px=(ev.clientX-rect.left)/rect.width*700;const mu=Number(mean.value),sigma=Number(sd.value);if(sigma>0){cutoff.value=fmt(mu+Math.max(-4,Math.min(4,zpix(px)))*sigma);render()}}
+plot.addEventListener('pointerdown',e=>{drag=true;plot.setPointerCapture(e.pointerId);moveFromPointer(e)});plot.addEventListener('pointermove',e=>{if(drag)moveFromPointer(e)});plot.addEventListener('pointerup',()=>drag=false);plot.addEventListener('pointercancel',()=>drag=false);
+render();
+})();
+</script>
+</body>
+</html>
